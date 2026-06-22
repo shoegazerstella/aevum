@@ -1,0 +1,98 @@
+name: Aevum
+options:
+  bundleIdPrefix: com.aevum
+  deploymentTarget:
+    macOS: "14.0"
+  developmentLanguage: en
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    CLANG_CXX_LANGUAGE_STANDARD: "c++20"
+    CLANG_CXX_LIBRARY: "libc++"
+    GCC_C_LANGUAGE_STANDARD: "c11"
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGNING_REQUIRED: NO
+    CODE_SIGNING_ALLOWED: YES
+    SWIFT_OBJC_BRIDGING_HEADER: Aevum/Sources/AevumApp/Aevum-Bridging-Header.h
+    HEADER_SEARCH_PATHS:
+      - "$(SRCROOT)/build/engine/headers"
+    USER_HEADER_SEARCH_PATHS:
+      - "$(SRCROOT)/build/engine/headers"
+    LD_RUNPATH_SEARCH_PATHS:
+      - "@executable_path/../Frameworks"
+      - "@loader_path/Frameworks"
+
+targets:
+  Aevum:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Aevum/Sources/AevumApp
+      - path: Aevum/Sources/Engine
+      - path: Aevum/Sources/Models
+      - path: Aevum/Sources/Storage
+      - path: Aevum/Sources/Import
+      - path: Aevum/Sources/Similarity
+      - path: Aevum/Sources/Utility
+      - path: Aevum/Sources/UI
+      - path: Aevum/Resources
+        type: folder
+        optional: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.aevum.app
+        PRODUCT_NAME: Aevum
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        INFOPLIST_FILE: Aevum/Sources/AevumApp/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Aevum/Sources/AevumApp/Aevum.entitlements
+        # Link the merged engine static lib + Metal/Accelerate frameworks.
+        # The bridge .mm is Obj-C++ so enable ARC for it.
+        CLANG_ENABLE_MODULES: YES
+        OTHER_LDFLAGS:
+          - "$(inherited)"
+          - "$(SRCROOT)/build/engine/libaevum_engine.a"
+          - "-framework Metal"
+          - "-framework Accelerate"
+          - "-framework Foundation"
+          - "-framework AppKit"
+          - "-framework AVFoundation"
+          - "-framework AudioToolbox"
+          - "-framework CoreAudio"
+          - "-framework CoreMIDI"
+          - "-framework UniformTypeIdentifiers"
+          - "-lc++"
+          - "-ObjC"
+        # Force the EngineBridge.mm to compile as Obj-C++ with ARC.
+        OTHER_CPLUSPLUSFLAGS:
+          - "$(inherited)"
+          - "-fobjc-arc"
+        # Copy mlx.metallib into the app bundle's MacOS directory so MLX
+        # finds its precompiled Metal shaders at runtime.
+        LD_RUNPATH_SEARCH_PATHS:
+          - "@executable_path"
+    dependencies: []
+    preBuildScripts:
+      - script: |
+          set -e
+          if [ ! -f "$PROJECT_DIR/build/engine/libaevum_engine.a" ]; then
+            echo "==> libaevum_engine.a not found — running build_engine.sh…"
+            bash "$PROJECT_DIR/scripts/build_engine.sh"
+          fi
+        name: Build Engine
+        inputFiles: []
+        outputFiles:
+          - $(SRCROOT)/build/engine/libaevum_engine.a
+    postBuildScripts:
+      - script: |
+          set -e
+          # Copy mlx.metallib next to the executable so MLX finds it.
+          if [ -f "$SRCROOT/build/engine/mlx.metallib" ]; then
+            cp "$SRCROOT/build/engine/mlx.metallib" "$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app/Contents/MacOS/mlx.metallib"
+          fi
+        name: Copy Metallib

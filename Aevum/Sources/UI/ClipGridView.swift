@@ -259,83 +259,79 @@ private struct ClipCell: View {
             HStack {
                 Text("\(loop.bars)b")
                     .font(AevumFont.monoBold)
-                    .foregroundStyle(.white.opacity(0.92))
+                    .foregroundStyle(.white.opacity(isActive ? 0.95 : 0.7))
                 Spacer()
-                // Slot badge — shows which slot (S0–S5) this clip is loaded into
-                if let slot = loadedSlot {
-                    Text("S\(slot)")
-                        .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .foregroundStyle(AevumColors.amber)
-                        .padding(.horizontal, 4).padding(.vertical, 1)
-                        .background(Capsule().fill(AevumColors.amber.opacity(0.18)))
-                        .overlay(Capsule().strokeBorder(AevumColors.amber.opacity(0.4), lineWidth: 0.5))
-                }
-                // Preview / playing indicator
                 if isPreviewing {
                     Image(systemName: "speaker.wave.2.fill")
                         .font(.system(size: 8))
                         .foregroundStyle(AevumColors.cyan)
                         .transition(.scale.combined(with: .opacity))
-                } else {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 8))
-                        .foregroundStyle(AevumColors.amber.opacity(0.7))
-                }
-                if isActive {
-                    Circle().fill(.white).frame(width: 6, height: 6)
-                        .shadow(color: .white.opacity(0.8), radius: 4)
-                        .transition(.scale.combined(with: .opacity))
                 }
             }
-            Text(loop.name)
-                .font(AevumFont.micro)
-                .foregroundStyle(.white.opacity(0.7))
-                .lineLimit(1)
             Spacer()
-            // Energy bar
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(.white.opacity(0.15)).frame(height: 2)
-                    Capsule()
-                        .fill(.white.opacity(isActive ? 0.85 : 0.5))
-                        .frame(width: geo.size.width * CGFloat(min(1, Float(loop.rating) / 5)), height: 2)
-                }
-            }.frame(height: 2)
+            // Slot badge — shows which slot (S0–S5) this clip is loaded into.
+            // The glowing amber dot lives top-right (website .clip.on marker).
+            if let slot = loadedSlot {
+                Text("S\(slot)")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundStyle(isActive ? AevumColors.amber : AevumColors.textFaint)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         .padding(AevumSpacing.s - 2)
         .frame(width: 96, height: 60)
         .background(
-            RoundedRectangle(cornerRadius: AevumRadius.small)
-                .fill(
-                    LinearGradient(colors: [
-                        Color(hexString: loop.color)?.opacity(0.85) ?? .gray.opacity(0.85),
-                        (Color(hexString: loop.color) ?? .gray).opacity(0.65)
-                    ], startPoint: .topLeading, endPoint: .bottomTrailing)
-                )
+            ZStack {
+                // Base — per-clip color so loops stay distinguishable.
+                RoundedRectangle(cornerRadius: AevumRadius.small)
+                    .fill(
+                        LinearGradient(colors: [
+                            Color(hexString: loop.color)?.opacity(0.85) ?? .gray.opacity(0.85),
+                            (Color(hexString: loop.color) ?? .gray).opacity(0.65)
+                        ], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    )
+                // Active overlay — amber→cyan 135° gradient (matches website .clip.on).
+                RoundedRectangle(cornerRadius: AevumRadius.small)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                AevumColors.amber.opacity(0.30 * Double(weight) + 0.05),
+                                AevumColors.cyan.opacity(0.18 * Double(weight) + 0.02)
+                            ],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        )
+                    )
+                    .opacity(isActive ? 1 : 0)
+            }
         )
         .overlay(
+            // Border — amber when active (website .clip.on), faint divider otherwise.
             RoundedRectangle(cornerRadius: AevumRadius.small)
-                .strokeBorder(.white.opacity(isActive ? 0.6 : 0.12), lineWidth: isActive ? 1.5 : 1)
+                .strokeBorder(isActive ? AevumColors.amber.opacity(0.5) : AevumColors.divider,
+                              lineWidth: 1)
         )
-        .overlay(alignment: .top) {
-            RoundedRectangle(cornerRadius: AevumRadius.small)
-                .fill(
-                    LinearGradient(colors: [.white.opacity(0.22), .clear],
-                                   startPoint: .top, endPoint: .center)
-                )
-                .frame(height: 12)
-                .mask(RoundedRectangle(cornerRadius: AevumRadius.small))
-        }
-        .shadow(color: isActive ? AevumColors.amber.opacity(Double(weight) * 0.6) : .clear,
+        .shadow(color: isActive ? AevumColors.amber.opacity(Double(weight) * 0.55) : .clear,
                 radius: isActive ? 10 : 0)
-        .scaleEffect(isActive ? 1.0 : 0.98)
+        .scaleEffect(isActive ? 1.02 : 1.0)
         .animation(AevumMotion.snappy, value: isActive)
+        .animation(AevumMotion.snappy, value: weight)
         .overlay(
+            // Selection ring (programmatic blend selection).
             RoundedRectangle(cornerRadius: AevumRadius.small)
                 .strokeBorder(AevumColors.amber, lineWidth: 2)
                 .opacity(isSelected ? 1 : 0)
         )
-        // Previewing state — cyan border + "Continue from here" button overlay
+        .overlay(alignment: .topTrailing) {
+            // Top-right amber glowing dot — the canonical "on" marker.
+            Circle()
+                .fill(AevumColors.amber)
+                .frame(width: 5, height: 5)
+                .shadow(color: AevumColors.amber.opacity(0.9), radius: 3)
+                .opacity(isActive ? 1 : 0)
+                .padding(4)
+                .allowsHitTesting(false)
+        }
+        // Previewing state — cyan border + "Continue from here" button overlay.
         .overlay(
             RoundedRectangle(cornerRadius: AevumRadius.small)
                 .strokeBorder(AevumColors.cyan, lineWidth: 1.5)

@@ -222,29 +222,53 @@ private struct CompactClipCell: View {
         VStack(spacing: 2) {
             Text("\(loop.bars)b")
                 .font(.system(size: 9, weight: .bold, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.9))
+                .foregroundStyle(.white.opacity(isActive ? 0.95 : 0.7))
             if let slot = loadedSlot {
                 Text("S\(slot)")
                     .font(.system(size: 7, weight: .bold, design: .monospaced))
-                    .foregroundStyle(AevumColors.amber)
+                    .foregroundStyle(isActive ? AevumColors.amber : AevumColors.textFaint)
             }
         }
         .frame(width: 52, height: 32)
         .background(
-            RoundedRectangle(cornerRadius: AevumRadius.small)
-                .fill(Color(hexString: loop.color)?.opacity(0.7) ?? .gray.opacity(0.7))
+            ZStack {
+                // Base — per-clip color so loops stay distinguishable.
+                RoundedRectangle(cornerRadius: AevumRadius.small)
+                    .fill(Color(hexString: loop.color)?.opacity(0.7) ?? .gray.opacity(0.7))
+                // Active overlay — amber→cyan 135° gradient (matches website .clip.on).
+                RoundedRectangle(cornerRadius: AevumRadius.small)
+                    .fill(
+                        LinearGradient(
+                            colors: [AevumColors.amber.opacity(0.30), AevumColors.cyan.opacity(0.18)],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        )
+                    )
+                    .opacity(isActive ? 1 : 0)
+            }
         )
         .overlay(
+            // Border — amber when active, faint divider otherwise.
             RoundedRectangle(cornerRadius: AevumRadius.small)
-                .strokeBorder(.white.opacity(isActive ? 0.7 : 0.12), lineWidth: isActive ? 1.5 : 1)
+                .strokeBorder(isActive ? AevumColors.amber.opacity(0.5) : AevumColors.divider,
+                              lineWidth: 1)
         )
+        .overlay(alignment: .topTrailing) {
+            // Top-right amber glowing dot — the canonical "on" marker.
+            Circle()
+                .fill(AevumColors.amber)
+                .frame(width: 4, height: 4)
+                .shadow(color: AevumColors.amber.opacity(0.9), radius: 2)
+                .opacity(isActive ? 1 : 0)
+                .padding(3)
+                .allowsHitTesting(false)
+        }
         .overlay(
             RoundedRectangle(cornerRadius: AevumRadius.small)
                 .strokeBorder(AevumColors.cyan, lineWidth: 1.5)
                 .opacity(isPreviewing ? 1 : 0)
         )
         .shadow(color: isActive ? AevumColors.amber.opacity(0.5) : .clear, radius: 8)
-        .scaleEffect(isActive ? 1.0 : 0.96)
+        .scaleEffect(isActive ? 1.02 : 0.98)
         .animation(AevumMotion.snappy, value: isActive)
         .help("Click to preview · double-click to add to blend")
     }

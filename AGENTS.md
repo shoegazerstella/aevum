@@ -35,6 +35,7 @@ point at `~/.cache/magenta-rt-v2` (see `AevumApp.swift`).
 ./build.sh engine   # CMake build of magentart::core + deps, merged into build/engine/libaevum_engine.a
 ./build.sh app      # XcodeGen generate + xcodebuild
 ./build.sh run      # build + launch the app
+./build.sh release  # build Release + package a distributable DMG at build/release/Aevum-<ver>.dmg
 
 # Clean everything:
 ./build.sh clean

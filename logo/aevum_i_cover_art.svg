@@ -1,0 +1,55 @@
+<svg width="100%" viewBox="0 0 690 690" role="img" xmlns="http://www.w3.org/2000/svg" style="">
+<title style="fill:rgb(0, 0, 0);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">Cover artwork for "Aevum I" — fluid organic blobs in warm amber, red and terracotta tones, evoking latent space morphing</title>
+<desc style="fill:rgb(0, 0, 0);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">A square album cover with overlapping organic fluid shapes in warm amber, burnt orange, terracotta and deep red, blending smoothly against a dark background, suggesting generative morphing and continuous transformation.</desc>
+<defs>
+<radialGradient id="bgGrad" cx="50%" cy="45%" r="75%">
+<stop offset="0%" stop-color="#1a0f0a"/>
+<stop offset="100%" stop-color="#0a0604"/>
+</radialGradient>
+<linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+<stop offset="0%" stop-color="#ffb86b"/>
+<stop offset="100%" stop-color="#e8623d"/>
+</linearGradient>
+<linearGradient id="g2" x1="0%" y1="100%" x2="100%" y2="0%">
+<stop offset="0%" stop-color="#c2410c"/>
+<stop offset="100%" stop-color="#7c2d12"/>
+</linearGradient>
+<linearGradient id="g3" x1="100%" y1="0%" x2="0%" y2="100%">
+<stop offset="0%" stop-color="#fbbf6a"/>
+<stop offset="100%" stop-color="#b8420f"/>
+</linearGradient>
+<linearGradient id="g4" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" stop-color="#9a2d1f"/>
+<stop offset="100%" stop-color="#3d140c"/>
+</linearGradient>
+<radialGradient id="glow1" cx="50%" cy="50%" r="50%">
+<stop offset="0%" stop-color="#ffd9a0" stop-opacity="0.55"/>
+<stop offset="100%" stop-color="#ffd9a0" stop-opacity="0"/>
+</radialGradient>
+<filter id="soften" x="-30%" y="-30%" width="160%" height="160%">
+<feGaussianBlur stdDeviation="18"/>
+</filter>
+<filter id="softenSm" x="-30%" y="-30%" width="160%" height="160%">
+<feGaussianBlur stdDeviation="8"/>
+</filter>
+</defs>
+<rect x="0" y="0" width="680" height="680" fill="url(#bgGrad)" style="stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+<g filter="url(#soften)" opacity="0.9" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.9;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+<path d="M 130 480 C 60 400, 90 250, 220 190 C 340 135, 460 170, 520 270 C 580 365, 540 480, 430 530 C 320 580, 200 560, 130 480 Z" fill="url(#g1)" style="stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+</g>
+<g filter="url(#soften)" opacity="0.85" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.85;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+<path d="M 420 600 C 320 610, 230 540, 250 440 C 270 340, 390 290, 480 330 C 580 375, 620 480, 570 550 C 530 605, 480 595, 420 600 Z" fill="url(#g2)" style="stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+</g>
+<g filter="url(#soften)" opacity="0.8" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.8;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+<path d="M 500 150 C 430 90, 320 100, 280 180 C 240 255, 290 330, 380 350 C 470 370, 560 330, 590 250 C 615 185, 570 210, 500 150 Z" fill="url(#g3)" style="stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+</g>
+<g filter="url(#soften)" opacity="0.7" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.7;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+<path d="M 180 250 C 110 220, 60 280, 80 360 C 100 440, 180 470, 250 430 C 320 390, 330 300, 280 260 C 250 235, 220 265, 180 250 Z" fill="url(#g4)" style="stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+</g>
+<g filter="url(#softenSm)" opacity="0.6" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.6;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+<ellipse cx="350" cy="340" rx="180" ry="150" fill="url(#glow1)" style="stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+</g>
+<g filter="url(#soften)" opacity="0.5" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.5;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+<path d="M 250 380 C 300 340, 380 350, 410 400 C 440 450, 410 510, 350 520 C 290 530, 240 490, 240 440 C 240 410, 230 400, 250 380 Z" fill="#ffe3b0" opacity="0.4" style="fill:rgb(255, 227, 176);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.4;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+</g>
+</svg>

@@ -278,14 +278,10 @@ final class AudioEngine {
             let room = Self.recMaxSamples - recWriteIdx
             if room >= n {
                 recBufL.withUnsafeMutableBufferPointer { lb in
-                    left.withUnsafeBufferPointer { src in
-                        memcpy(lb.baseAddress! + recWriteIdx, src.baseAddress, n * 4)
-                    }
+                    memcpy(lb.baseAddress! + recWriteIdx, left, n * 4)
                 }
                 recBufR.withUnsafeMutableBufferPointer { rb in
-                    right.withUnsafeBufferPointer { src in
-                        memcpy(rb.baseAddress! + recWriteIdx, src.baseAddress, n * 4)
-                    }
+                    memcpy(rb.baseAddress! + recWriteIdx, right, n * 4)
                 }
                 recWriteIdx += n
             }

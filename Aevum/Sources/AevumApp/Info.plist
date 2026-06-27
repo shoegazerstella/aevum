@@ -6,6 +6,8 @@
     <string>Aevum</string>
     <key>CFBundleDisplayName</key>
     <string>Aevum</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
     <key>CFBundleVersion</key>

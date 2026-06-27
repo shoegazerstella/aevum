@@ -1,35 +1,41 @@
 // AevumApp.swift — macOS app entry point.
+//
+// On launch, checks whether the model assets are present at
+// ~/.cache/magenta-rt-v2. If not, shows FirstRunView (downloads them
+// from HuggingFace) before constructing the EngineController — loading
+// the engine without the model files would just produce a confusing
+// error. Once the downloader reports .done, swap to the main window.
 
 import SwiftUI
 
 @main
 struct AevumApp: App {
     @StateObject private var controller: EngineController
+    @State private var modelsReady: Bool = ModelAssets.isPresent
 
     init() {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let base = "\(home)/.cache/magenta-rt-v2"
-        let modelPath = "\(base)/models/mrt2_small/mrt2_small.mlxfn"
-        let resourcePath = "\(base)/resources"
-        let spectrostreamPath = "\(base)/resources/spectrostream/spectrostream_encoder.mlxfn"
-
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let libraryURL = appSupport.appendingPathComponent("Aevum/library.sqlite")
+        // Build paths from the single source of truth in ModelAssets.
+        let libraryURL = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("Aevum/library.sqlite")
 
         let ctrl = EngineController(libraryURL: libraryURL,
-                                    modelPath: modelPath,
-                                    resourcePath: resourcePath,
-                                    spectrostreamPath: spectrostreamPath)
+                                    modelPath: ModelAssets.modelPath,
+                                    resourcePath: ModelAssets.resourcePath,
+                                    spectrostreamPath: ModelAssets.spectrostreamPath)
         _controller = StateObject(wrappedValue: ctrl)
-
-        Task { await ctrl.loadEngine() }
     }
 
     var body: some SwiftUI.Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(controller)
-                .frame(minWidth: 1200, minHeight: 750)
+            if modelsReady {
+                ContentView()
+                    .environmentObject(controller)
+                    .frame(minWidth: 1200, minHeight: 750)
+                    .task { if !controller.isEngineLoaded { await controller.loadEngine() } }
+            } else {
+                FirstRunView { modelsReady = true }
+            }
         }
         .windowStyle(.titleBar)
         .commands {

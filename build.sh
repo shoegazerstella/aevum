@@ -5,6 +5,7 @@
 #   ./build.sh engine    # just the C++ engine static lib
 #   ./build.sh app       # just the Xcode app (assumes engine is built)
 #   ./build.sh run       # build + launch the app
+#   ./build.sh release   # build Release + package a distributable DMG
 #   ./build.sh clean     # wipe all build artifacts
 #
 # Prereqs: Xcode.app installed + selected, Homebrew, uv, the .venv with
@@ -63,6 +64,11 @@ run_app() {
     open "$APP_PATH"
 }
 
+release_app() {
+    ensure_xcode
+    bash "$ROOT/scripts/package_release.sh"
+}
+
 clean_all() {
     echo "==> Cleaning build artifacts…"
     rm -rf "$ROOT/build" "$ROOT/Aevum.xcodeproj" "$ROOT/Aevum.xcworkspace"
@@ -70,10 +76,11 @@ clean_all() {
 }
 
 case "$ACTION" in
-    engine) build_engine ;;
-    app)    build_app ;;
-    run)    run_app ;;
-    clean)  clean_all ;;
-    all)    build_engine && build_app ;;
-    *) echo "Usage: $0 [engine|app|run|clean|all]"; exit 1 ;;
+    engine)  build_engine ;;
+    app)     build_app ;;
+    run)     run_app ;;
+    release) release_app ;;
+    clean)   clean_all ;;
+    all)     build_engine && build_app ;;
+    *) echo "Usage: $0 [engine|app|run|release|clean|all]"; exit 1 ;;
 esac

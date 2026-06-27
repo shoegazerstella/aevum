@@ -1,6 +1,20 @@
-# Aevum
+<p align="center">
+  <img src="docs/logo.png" width="160" alt="Aevum">
+</p>
 
-A macOS app for live AI music performance built on [Magenta RealTime 2](https://magenta.withgoogle.com/magenta-realtime-2). Load songs, auto-extract musical loops, morph between them in real time, and control every generation parameter live with a MIDI controller.
+<h1 align="center">Aevum</h1>
+
+<p align="center">A macOS app for live AI music performance built on <a href="https://magenta.withgoogle.com/magenta-realtime-2">Magenta RealTime 2</a>. Load songs, auto-extract musical loops, morph between them in real time, and control every generation parameter live with a MIDI controller.</p>
+
+<p align="center">
+  <a href="https://github.com/shoegazerstella/aevum/releases/latest"><img src="https://img.shields.io/badge/download-macOS%20%7C%20Apple%20Silicon-FFB547?style=flat-square" alt="Download"></a>
+  <a href="https://shoegazerstella.github.io/aevum"><img src="https://img.shields.io/badge/website-aevum.app-3DD9EB?style=flat-square" alt="Website"></a>
+  <a href="https://huggingface.co/google/magenta-realtime-2"><img src="https://img.shields.io/badge/model-Magenta%20RT%202-8B8E96?style=flat-square" alt="Model"></a>
+</p>
+
+<p align="center">
+  <img src="docs/screenshot.png" width="880" alt="Aevum interface — clip grid, prompt surface, transport, param panel">
+</p>
 
 > **Status:** Phase 1 complete. App builds, runs, and generates real-time audio on Apple Silicon.
 
@@ -83,11 +97,36 @@ fresh macOS terminal; `~/.cache` avoids the permission prompt.
 ./build.sh run      # build + launch
 ./build.sh engine   # just the C++ engine static lib
 ./build.sh app      # just the Xcode app (assumes engine is built)
+./build.sh release  # build Release + package a distributable DMG
 ./build.sh clean    # wipe all build artifacts
 ```
 
 The first `./build.sh engine` takes 10–20 minutes (MLX + TFLite +
 SentencePiece from source). Subsequent runs are incremental.
+
+## Distribution
+
+`./build.sh release` produces `build/release/Aevum-<version>.dmg` — an
+unsigned, drag-to-install DMG (Aevum.app + Applications symlink). The DMG
+is ~45 MB; the app is ~130 MB.
+
+The app ships without the ~1.8 GB of model weights. On first launch it
+detects that the assets are missing from `~/.cache/magenta-rt-v2` and
+shows a download screen that fetches them from HuggingFace
+(`google/magenta-realtime-2`). Users who already ran `mrt models init` +
+`mrt models download mrt2_small` won't re-download — the manifest checks
+file presence and byte size.
+
+Because the app is unsigned, the first launch needs a one-time Gatekeeper
+bypass: right-click → Open → confirm. This is documented on the landing
+page at `docs/index.html` (served via GitHub Pages from the `/docs`
+folder).
+
+To publish a release:
+1. `./build.sh release`
+2. Create a GitHub Release (or push a `v*` tag — the `.github/workflows/release.yml`
+   Action builds and attaches the DMG automatically).
+3. Enable GitHub Pages on the repo: Settings → Pages → Source → `main` / `/docs`.
 
 ## Using it
 

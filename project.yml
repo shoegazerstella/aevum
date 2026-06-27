@@ -41,7 +41,6 @@ targets:
       - path: Aevum/Sources/Utility
       - path: Aevum/Sources/UI
       - path: Aevum/Resources
-        type: folder
         optional: true
     settings:
       base:

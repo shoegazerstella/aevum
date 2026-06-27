@@ -380,7 +380,7 @@
       <h1>Play the model.<br><span class="grad">Live.</span></h1>
       <p class="lead">Aevum is a macOS instrument for live AI music performance. Import songs, auto-extract beat-aligned loops, and morph between them in real time — every generation parameter under your MIDI controller.</p>
       <div class="cta-row">
-        <a class="btn btn-primary" href="https://github.com/shoegazerstella/aevum/releases/latest" target="_blank" rel="noopener">
+        <a class="btn btn-primary" href="https://github.com/shoegazerstella/aevum/releases/download/v0.1.0/Aevum-0.1.0.dmg" download>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
           Download for Mac
         </a>
@@ -553,12 +553,13 @@
         <ol class="steps">
           <li><div class="t">Download the DMG</div><div class="d">Grab the latest <code>Aevum-*.dmg</code> from GitHub Releases.</div></li>
           <li><div class="t">Drag to Applications</div><div class="d">Mount the DMG and drag Aevum into the Applications symlink.</div></li>
-          <li><div class="t">Open it the first time</div><div class="d">Right-click → Open (Apple shows a warning because Aevum isn't notarized). Confirm. This is only needed once.</div></li>
+          <li><div class="t">Remove the quarantine flag</div><div class="d">Open <b>Terminal</b> and run:<br><code>xattr -cr /Applications/Aevum.app</code><br>This clears the Gatekeeper flag. Browsers tag unsigned downloads as quarantined; without this, macOS shows "Aevum is damaged" instead of opening.</div></li>
+          <li><div class="t">Launch it</div><div class="d">Double-click Aevum in Applications. You only need the <code>xattr</code> command once — macOS remembers the app after that.</div></li>
           <li><div class="t">Let it download the model</div><div class="d">The first-run screen pulls ~1.8 GB from HuggingFace. After that you're fully offline.</div></li>
           <li><div class="t">Import songs &amp; play</div><div class="d">Drop in some audio, double-click clips into slots, move the cursor on the pad.</div></li>
         </ol>
         <div class="note">
-          <b>Why right-click → Open?</b> Aevum ships unsigned to keep it free. The first launch needs a one-time bypass of Gatekeeper; macOS remembers your choice after that. If you already ran <code>mrt models download</code>, Aevum reuses those files — no re-download.
+          <b>Why <code>xattr</code>?</b> Aevum ships unsigned (no $99/yr Apple Developer account) to keep it free. macOS quarantines unsigned downloads and on recent versions refuses to launch them with a misleading "damaged" message — <code>xattr -cr</code> clears that flag so Gatekeeper lets it run. If you haven't dragged Aevum to Applications yet, run <code>xattr -d com.apple.quarantine ~/Downloads/Aevum-*.dmg</code> on the DMG first. If you already ran <code>mrt models download</code>, Aevum reuses those files — no re-download.
         </div>
       </div>
       <div class="card">
@@ -615,6 +616,10 @@
         <p>Yes. Hit the record button in the transport bar — Aevum captures the live stereo output to <code>~/Music/Aevum/</code> as a 48 kHz WAV. Import that into your DAW or upload straight to SoundCloud/Bandcamp.</p>
       </details>
       <details>
+        <summary>macOS says "Aevum is damaged and can't be opened" — why?</summary>
+        <p>That's Gatekeeper, not a real corruption. Browsers tag unsigned downloads with a quarantine flag, and recent macOS versions refuse to launch quarantined unsigned apps with a misleading "damaged" message instead of the friendlier "unidentified developer" one. Clear the flag in Terminal:<br><code>xattr -cr /Applications/Aevum.app</code><br>If the DMG itself is flagged before you can mount it, run <code>xattr -d com.apple.quarantine ~/Downloads/Aevum-*.dmg</code> first, then mount + drag. You only do this once. The real long-term fix is notarization, which requires a paid Apple Developer account — not in scope for v0.1.</p>
+      </details>
+      <details>
         <summary>Why is the first launch download so big?</summary>
         <p>The model weights are ~1.8 GB. Bundling them in the app would make the download painful for everyone, even people who already have the files. The first-run downloader checks for existing files at <code>~/.cache/magenta-rt-v2</code> and skips them.</p>
       </details>
@@ -627,7 +632,7 @@
   <div class="wrap">
     <h2>Ready to play the model?</h2>
     <p>Free · open source · macOS · Apple Silicon</p>
-    <a class="btn btn-primary" href="https://github.com/shoegazerstella/aevum/releases/latest" target="_blank" rel="noopener">
+    <a class="btn btn-primary" href="https://github.com/shoegazerstella/aevum/releases/download/v0.1.0/Aevum-0.1.0.dmg" download>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
       Download Aevum
     </a>

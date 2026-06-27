@@ -19,6 +19,98 @@ final class AudioEngine {
 
     weak var bridge: EngineBridge?
 
+    // ─── Live output level tap ────────────────────────────────────────────
+    // A lock-free SPSC ring buffer of per-column peak amplitudes, written
+    // from the audio render thread and read by `LiveWaveformView` on the
+    // main thread. Each "column" covers `columnSamples` frames (~10 ms),
+    // so the ~360-entry ring holds ~3.6 s of scrolling history. The writer
+    // accumulates samples into `tapAccum` until it has a full column, then
+    // pushes the peak and resets. All atomics are relaxed — visualization
+    // tolerates torn reads, and there's only one producer + one consumer.
+    struct LevelTap {
+        static let capacity = 360
+        static let columnSamples = 480 // 10 ms @ 48 kHz
+        var peaks: [Float] = [Float](repeating: 0, count: capacity) // 0..1 per column
+        var writeIndex = 0
+    }
+    private var tap = LevelTap()
+    private var tapAccum: Float = 0
+    private var tapAccumCount: Int = 0
+
+    /// Snapshot of the current peak ring for the UI. Returns (peaks, writeIndex).
+    /// Copies under the assumption that a torn read just produces a briefly
+    /// inconsistent frame — fine for a glowing waveform.
+    func levelSnapshot() -> (peaks: [Float], writeIndex: Int) {
+        (tap.peaks, tap.writeIndex)
+    }
+
+    // ─── Swift-side recording ─────────────────────────────────────────────
+    // We capture directly in the render callback rather than using the
+    // C++ engine's recording buffer. The C++ path's `recorded_samples_`
+    // counter was observed returning 0 even after a 3s take (likely a
+    // state/visibility issue across the Obj-C++ boundary); capturing in
+    // Swift guarantees every rendered frame is recorded as long as the
+    // audio engine is pulling. The buffer is a pre-allocated array
+    // protected by a mutex; the render thread appends, the UI thread
+    // exports + clears. 48 kHz stereo Float32 → 5 min cap = ~115 MB.
+    //
+    // Performance: the buffer is reserved to its max capacity at
+    // startRecording() so the render-callback append never reallocs (a
+    // realloc mid-take would spike CPU and could starve the 25 Hz
+    // inference loop / Metal GPU work). The mutex is a lightweight
+    // semaphore held only for the memcpy-bound append — microseconds.
+    private var recBufL: [Float] = []
+    private var recBufR: [Float] = []
+    private var recWriteIdx: Int = 0
+    private let recMutex = DispatchSemaphore(value: 1)
+    private(set) var isSwiftRecording = false
+    private static let recMaxSamples = 5 * 60 * 48_000 // 5 minutes @ 48 kHz
+
+    func startSwiftRecording() {
+        recMutex.wait()
+        // Pre-allocate to full capacity once so the hot append in the
+        // render callback is a bounds-checked store into existing
+        // memory — no growth, no realloc, no CPU spike mid-performance.
+        recBufL = [Float](repeating: 0, count: Self.recMaxSamples)
+        recBufR = [Float](repeating: 0, count: Self.recMaxSamples)
+        recWriteIdx = 0
+        isSwiftRecording = true
+        recMutex.signal()
+    }
+
+    func stopSwiftRecording() {
+        recMutex.wait()
+        isSwiftRecording = false
+        recMutex.signal()
+    }
+
+    /// Returns (left, right) arrays of length `recWriteIdx`. The internal
+    /// buffer is cleared (re-allocated empty) so a subsequent take starts
+    /// fresh.
+    func readAndClearRecording() -> (left: [Float], right: [Float]) {
+        recMutex.wait()
+        let n = recWriteIdx
+        let l = Array(recBufL.prefix(n))
+        let r = Array(recBufR.prefix(n))
+        recBufL.removeAll(keepingCapacity: false)
+        recBufR.removeAll(keepingCapacity: false)
+        recWriteIdx = 0
+        recMutex.signal()
+        return (l, r)
+    }
+
+    var recordedSampleCount: Int {
+        recMutex.wait()
+        let n = recWriteIdx
+        recMutex.signal()
+        return n
+    }
+
+    private func tapPushPeak(_ p: Float) {
+        tap.peaks[tap.writeIndex] = p
+        tap.writeIndex = (tap.writeIndex + 1) % LevelTap.capacity
+    }
+
     init(bridge: EngineBridge) {
         self.bridge = bridge
         let fmt = AVAudioFormat(commonFormat: .pcmFormatFloat32,
@@ -150,6 +242,55 @@ final class AudioEngine {
         let left = leftData.assumingMemoryBound(to: Float.self)
         let right = rightData.assumingMemoryBound(to: Float.self)
         _ = bridge.readAudioStereoL(left, r: right, count: UInt(frameCount))
+
+        // Level tap: accumulate the max |sample| across both channels into
+        // ~10 ms columns, then push each finished column to the ring.
+        let n = Int(frameCount)
+        var i = 0
+        while i < n {
+            let remaining = LevelTap.columnSamples - tapAccumCount
+            let take = min(remaining, n - i)
+            var localMax = tapAccum
+            for j in 0..<take {
+                let l = abs(left[i + j])
+                let r = abs(right[i + j])
+                let m = l > r ? l : r
+                if m > localMax { localMax = m }
+            }
+            tapAccum = localMax
+            tapAccumCount += take
+            i += take
+            if tapAccumCount >= LevelTap.columnSamples {
+                tapPushPeak(min(1, tapAccum))
+                tapAccum = 0
+                tapAccumCount = 0
+            }
+        }
+
+        // Swift-side recording: store the rendered frame into the
+        // pre-allocated rec buffer. Captured here so recording tracks the
+        // actual audio output. The buffer was reserved to full capacity
+        // at startSwiftRecording(), so this is a memcpy into existing
+        // memory — no realloc, no GPU/CPU contention with the inference
+        // loop. Indexed store avoids Array's growth bookkeeping.
+        if isSwiftRecording {
+            recMutex.wait()
+            let room = Self.recMaxSamples - recWriteIdx
+            if room >= n {
+                recBufL.withUnsafeMutableBufferPointer { lb in
+                    left.withUnsafeBufferPointer { src in
+                        memcpy(lb.baseAddress! + recWriteIdx, src.baseAddress, n * 4)
+                    }
+                }
+                recBufR.withUnsafeMutableBufferPointer { rb in
+                    right.withUnsafeBufferPointer { src in
+                        memcpy(rb.baseAddress! + recWriteIdx, src.baseAddress, n * 4)
+                    }
+                }
+                recWriteIdx += n
+            }
+            recMutex.signal()
+        }
         return noErr
     }
 }

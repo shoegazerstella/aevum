@@ -45,6 +45,10 @@ struct AevumApp: App {
                 Button("Reset Engine") {
                     NotificationCenter.default.post(name: .triggerReset, object: nil)
                 }.keyboardShortcut("r", modifiers: [])
+
+                Button("Focus Mode") {
+                    NotificationCenter.default.post(name: .toggleFocused, object: nil)
+                }.keyboardShortcut("f", modifiers: [.command])
             }
         }
     }
@@ -54,4 +58,5 @@ extension Notification.Name {
     static let importSongs = Notification.Name("Aevum.importSongs")
     static let togglePlay = Notification.Name("Aevum.togglePlay")
     static let triggerReset = Notification.Name("Aevum.triggerReset")
+    static let toggleFocused = Notification.Name("Aevum.toggleFocused")
 }

@@ -4,7 +4,10 @@
 // back. Each loaded clip label follows its dot.
 //
 // The cursor + slot positions are @Published on EngineController so
-// scenes can capture and restore the full prompt-surface state.
+// scenes can capture and restore the full prompt-surface state. The
+// cursor leaves a fading trail so morph motion is visible during a set;
+// connection lines from cursor → slot are drawn in the blend-axis color
+// (amber→cyan) and thicken with their blend weight.
 
 import SwiftUI
 
@@ -12,6 +15,7 @@ struct PromptSurfacePad: View {
     @EnvironmentObject var controller: EngineController
     @State private var pulse: Bool = false
     @State private var showHelp: Bool = false
+    @State private var trail: [CGPoint] = []
 
     // Cursor + slot positions are read from / written to the controller.
     // Local @State copies would break scene capture/restore.
@@ -41,7 +45,7 @@ struct PromptSurfacePad: View {
                                 Text("How it works").font(.headline)
                                 Text("Each dot is a loaded clip. Drag the cursor around the surface — the engine blends between nearby clips based on distance. The closer the cursor is to a dot, the more that clip influences the sound.")
                                     .font(.caption).foregroundStyle(.secondary)
-                                Text("Drag individual dots to rearrange the space to your liking. Tap the center reset button to snap the cursor back to center. Single-click a clip in the grid to solo it; double-click to add/remove it from the blend.")
+                                Text("Drag individual dots to rearrange the space to your liking. Tap the center reset button to snap the cursor back to center. Arrow keys nudge the cursor for fine control. Single-click a clip in the grid to solo it; double-click to add/remove it from the blend.")
                                     .font(.caption).foregroundStyle(.secondary)
                             }
                             .frame(width: 260)
@@ -68,7 +72,8 @@ struct PromptSurfacePad: View {
                 let size = min(geo.size.width, geo.size.height) - 16
 
                 ZStack {
-                    // Blend field — subtle gradient, no distracting grid lines
+                    // Blend field — subtle radial gradient with a faint
+                    // moving glow tied to the cursor for a "live field" feel.
                     RoundedRectangle(cornerRadius: AevumRadius.medium)
                         .fill(
                             RadialGradient(colors: [
@@ -78,7 +83,9 @@ struct PromptSurfacePad: View {
                         )
                         .frame(width: size, height: size)
 
-                    // Connection lines from cursor to each active slot
+                    // Connection lines from cursor to each active slot.
+                    // Thickness + opacity scale with blend weight; color
+                    // follows the blend axis (amber→cyan) by slot index.
                     Canvas { ctx, sz in
                         for slot in 0..<6 where controller.blendWeights[slot] > 0.01 {
                             let pos = slotPositions[slot] ?? controller.defaultSlotPosition(slot)
@@ -88,15 +95,32 @@ struct PromptSurfacePad: View {
                             var line = Path()
                             line.move(to: c)
                             line.addLine(to: p)
-                            ctx.stroke(line, with: .color(AevumColors.amber.opacity(w * 0.25)),
-                                       lineWidth: 1)
+                            let t = Double(slot) / 5.0
+                            ctx.stroke(line,
+                                       with: .color(AevumColors.blendAxis(at: t).opacity(Double(w * 0.55))),
+                                       lineWidth: 1 + 2 * w)
                         }
                     }
                     .frame(width: size, height: size)
 
-                    // Slot dots — sized/glowing by blend weight, with clip name labels.
-                    // Show a dot for any slot that has a loop loaded, even at weight 0,
-                    // so the user can see and drag it.
+                    // Cursor trail — fading dots of the last N positions.
+                    Canvas { ctx, sz in
+                        let n = trail.count
+                        for (i, pt) in trail.enumerated() {
+                            let age = CGFloat(n - i) / CGFloat(max(1, n))
+                            let alpha = (1 - age) * 0.35
+                            let r = 2 + (1 - age) * 3
+                            let p = CGPoint(x: pt.x * sz.width, y: pt.y * sz.height)
+                            let rect = CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)
+                            ctx.fill(Path(ellipseIn: rect),
+                                     with: .color(AevumColors.amber.opacity(Double(alpha))))
+                        }
+                    }
+                    .frame(width: size, height: size)
+                    .allowsHitTesting(false)
+
+                    // Slot dots — sized/glowing by blend weight, colored
+                    // along the blend axis so the morph position is readable.
                     ForEach(0..<6, id: \.self) { slot in
                         let w = controller.blendWeights[slot]
                         if slotPositions[slot] != nil || controller.slotLoopIds[slot] != nil {
@@ -126,16 +150,21 @@ struct PromptSurfacePad: View {
                         }
                     }
 
-                    // Cursor — glowing orb
+                    // Cursor — glowing orb with breathing ring
                     ZStack {
                         Circle()
                             .fill(AevumColors.amber)
-                            .frame(width: 10, height: 10)
-                            .shadow(color: AevumColors.amber.opacity(0.8), radius: 14)
+                            .frame(width: 12, height: 12)
+                            .shadow(color: AevumColors.amber.opacity(0.9), radius: 16)
                         Circle()
                             .strokeBorder(.white.opacity(0.6), lineWidth: 1.5)
-                            .frame(width: 20, height: 20)
-                            .scaleEffect(pulse ? 1.12 : 0.88)
+                            .frame(width: 24, height: 24)
+                            .scaleEffect(pulse ? 1.15 : 0.85)
+                        Circle()
+                            .strokeBorder(AevumColors.amber.opacity(0.3), lineWidth: 1)
+                            .frame(width: 36, height: 36)
+                            .scaleEffect(pulse ? 1.25 : 0.95)
+                            .opacity(pulse ? 0.0 : 0.5)
                     }
                     .position(x: cursor.x * size, y: cursor.y * size)
                     .onAppear { withAnimation(AevumMotion.glow) { pulse = true } }
@@ -155,11 +184,15 @@ struct PromptSurfacePad: View {
                 .gesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { v in
-                            controller.cursorPosition = CGPoint(
+                            let p = CGPoint(
                                 x: max(0, min(1, v.location.x / size)),
                                 y: max(0, min(1, v.location.y / size)))
+                            controller.cursorPosition = p
+                            // Append to trail (cap length).
+                            trail.append(p)
+                            if trail.count > 24 { trail.removeFirst(trail.count - 24) }
                             controller.updatePromptSurface(
-                                cursor: controller.cursorPosition,
+                                cursor: p,
                                 slotPositions: controller.slotPositions)
                         }
                 )
@@ -168,25 +201,48 @@ struct PromptSurfacePad: View {
         }
         .background(AevumColors.panel)
     }
+
+    /// Nudge the cursor by a small delta (for arrow-key control). Public
+    /// so ContentView's keyboard handler can call it.
+    func nudgeCursor(dx: CGFloat, dy: CGFloat) {
+        let p = CGPoint(
+            x: max(0, min(1, controller.cursorPosition.x + dx)),
+            y: max(0, min(1, controller.cursorPosition.y + dy)))
+        controller.cursorPosition = p
+        trail.append(p)
+        if trail.count > 24 { trail.removeFirst(trail.count - 24) }
+        controller.updatePromptSurface(cursor: p, slotPositions: controller.slotPositions)
+    }
 }
 
 private struct SlotDot: View {
     let slot: Int
     let weight: Float
     let label: String?
+    @State private var breathe: Bool = false
 
     var body: some View {
         let intensity = max(0.15, CGFloat(weight))
+        let color = AevumColors.blendAxis(at: Double(slot) / 5.0)
         VStack(spacing: 2) {
             ZStack {
                 Circle()
-                    .fill(AevumColors.amber.opacity(Double(intensity)))
-                    .frame(width: 14 + 10 * intensity, height: 14 + 10 * intensity)
-                    .shadow(color: AevumColors.amber.opacity(Double(intensity) * 0.6),
-                            radius: 6 * intensity)
+                    .fill(color.opacity(Double(intensity)))
+                    .frame(width: 16 + 12 * intensity, height: 16 + 12 * intensity)
+                    .shadow(color: color.opacity(Double(intensity) * 0.7),
+                            radius: 8 * intensity)
                 Circle()
                     .strokeBorder(.white.opacity(0.5), lineWidth: 1)
-                    .frame(width: 14, height: 14)
+                    .frame(width: 16, height: 16)
+                // Breathing outer ring for active slots.
+                if weight > 0.01 {
+                    Circle()
+                        .strokeBorder(color.opacity(0.4), lineWidth: 1)
+                        .frame(width: 26, height: 26)
+                        .scaleEffect(breathe ? 1.2 : 0.95)
+                        .opacity(breathe ? 0.0 : 0.6)
+                        .onAppear { withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: false)) { breathe = true } }
+                }
                 Text("\(slot)")
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(.white.opacity(weight > 0.1 ? 0.95 : 0.4))

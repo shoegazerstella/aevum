@@ -48,6 +48,32 @@ final class EngineController: ObservableObject {
     @Published var isPrefilling: Bool = false
     @Published var prefillLog: [String] = []
 
+    // One-time re-extraction of library embeddings after the 16 kHz mono
+    // fix. Existing rows were extracted with 48 kHz stereo → garbage
+    // MusicCoCa embeddings; this re-runs extraction with the correct
+    // sample format so morphing actually reflects the clips.
+    @Published var isMigratingEmbeddings: Bool = false
+    @Published var embeddingMigrationDone: Int = 0
+    @Published var embeddingMigrationTotal: Int = 0
+
+    // Style-steer status surfaced to the UI so you can see whether clips
+    // are actually driving generation or the engine fell back to its
+    // default "piano" tokens. `true` when at least one loaded slot has a
+    // valid embedding and the latest reblend applied it.
+    @Published var styleSteeringActive: Bool = false
+    @Published var styleStatusLabel: String = "no prompt"
+
+    // Recording / performance capture. The engine exposes
+    // start/stop/clear + read APIs; this surfaces them to the UI and
+    // writes the captured audio to ~/Music/Aevum on stop.
+    @Published var isRecording: Bool = false
+    @Published var lastRecordingURL: URL?
+    @Published var recordingError: String?
+
+    // Focused (in-window performance) mode — hides the sidebar + param
+    // panel and enlarges the prompt surface for live sets.
+    @Published var isFocused: Bool = false
+
     // Cache decoded audio for the currently-selected song (for waveform + re-extract).
     @Published var decodedAudioCache: [Int64: DecodedAudio] = [:]
 
@@ -104,6 +130,11 @@ final class EngineController: ObservableObject {
         loadPerfSettings()
         bridge.setBufferSize(bufferSize)
         applyQualityPreset(qualityPreset)
+        // Unmask width isn't part of the quality preset — set the live
+        // default (1 = coarse only, stable) explicitly so it's not left
+        // at 0 on a fresh launch.
+        bridge.setUnmaskWidth(1)
+        paramSnapshot.unmaskWidth = 1
         bridge.start()
         // Defer text prompt to avoid TFLite crash on launch — user can set via UI later.
         isEngineLoaded = true
@@ -112,6 +143,23 @@ final class EngineController: ObservableObject {
         // the engine generates audio from default prompts immediately.
         startMetricsPolling()
         refreshLibrary()
+        // Re-extract any legacy embeddings once (48 kHz stereo → 16 kHz mono
+        // fix). No-op if already migrated or the library is empty.
+        migrateEmbeddingsIfNeeded()
+
+        // Debug auto-record: if AEVUM_AUTO_REC=1, wait for the engine to
+        // load + spin up, then record 3s and stop. Lets us verify the
+        // capture/export path without UI interaction.
+        if ProcessInfo.processInfo.environment["AEVUM_AUTO_REC"] == "1" {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 6_000_000_000)
+                print("[rec] auto: starting 3s test recording")
+                startRecording()
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                stopRecording()
+                print("[rec] auto: done, lastURL=\(String(describing: lastRecordingURL))")
+            }
+        }
     }
 
     func stop() {
@@ -138,6 +186,112 @@ final class EngineController: ObservableObject {
             songs = try library.allSongs()
             loops = try library.allLoops()
         } catch { print("refreshLibrary: \(error)") }
+    }
+
+    // MARK: - Embedding migration (48 kHz stereo → 16 kHz mono fix)
+
+    /// One-time migration: re-extract every loop's MusicCoCa embedding with
+    /// the corrected 16 kHz mono path. Existing rows were extracted with
+    /// 48 kHz interleaved stereo, which produces garbage embeddings because
+    /// the C++ `audio_preprocessor` does a raw memcpy with no resample.
+    /// Gated by a UserDefaults flag so it runs exactly once.
+    func migrateEmbeddingsIfNeeded() {
+        let key = "aevum_embedding_v2_migrated"
+        if UserDefaults.standard.bool(forKey: key) { return }
+        guard !loops.isEmpty else {
+            UserDefaults.standard.set(true, forKey: key)
+            return
+        }
+        reextractAllEmbeddings(markMigrated: true)
+    }
+
+    /// Re-extract every loop's embedding with the 16 kHz mono path and
+    /// persist to the DB. Re-loads any loops currently in slots so they
+    /// pick up the corrected embeddings without a manual re-launch.
+    func reextractAllEmbeddings(markMigrated: Bool = false) {
+        let allLoops = loops
+        guard !allLoops.isEmpty else { return }
+        isMigratingEmbeddings = true
+        embeddingMigrationDone = 0
+        embeddingMigrationTotal = allLoops.count
+        Task { @MainActor in
+            // Group by song so each song is decoded only once.
+            let bySong = Dictionary(grouping: allLoops, by: { $0.songId })
+            var done = 0
+            var failures = 0
+            for (songId, songLoops) in bySong {
+                guard let audio = await decodedAudio(for: songId) else {
+                    done += songLoops.count
+                    failures += songLoops.count
+                    embeddingMigrationDone = done
+                    continue
+                }
+                for loop in songLoops {
+                    let emb = await embeddingExtractor.extract(
+                        from: audio, startSec: loop.startSec, endSec: loop.endSec)
+                    if let emb, emb.count >= 768, let id = loop.id {
+                        try? library.updateLoopEmbedding(id, embedding: emb)
+                    } else if let id = loop.id {
+                        // Extraction failed — clear any stale zero/garbage
+                        // embedding so the style status shows "fallback"
+                        // and the user knows to re-extract.
+                        try? library.updateLoopEmbedding(id, embedding: [])
+                        failures += 1
+                    }
+                    done += 1
+                    embeddingMigrationDone = done
+                }
+            }
+            refreshLibrary()
+            // Re-load any loops currently occupying slots so the live engine
+            // picks up the corrected embeddings (preserves current blend
+            // weights — we only refresh the per-slot embedding, then re-blend).
+            let slotsToRestore = slotLoopIds
+            for slot in 0..<6 {
+                if let loopId = slotsToRestore[slot],
+                   let loop = self.loops.first(where: { $0.id == loopId }),
+                   loop.embedding.count >= 768 {
+                    loop.embedding.withUnsafeBufferPointer { eb in
+                        bridge.setAudioEmbeddingForIndex(Int32(slot), embedding: eb.baseAddress!)
+                    }
+                }
+            }
+            applyBlendWeights(blendWeights)
+            updateStyleStatus()
+            isMigratingEmbeddings = false
+            // Only mark migrated if every loop succeeded — failed clips
+            // get retried on the next launch.
+            if markMigrated && failures == 0 {
+                UserDefaults.standard.set(true, forKey: "aevum_embedding_v2_migrated")
+            } else if failures > 0 {
+                print("[migrate] \(failures) embedding(s) failed — will retry next launch")
+            }
+        }
+    }
+
+    /// Refresh `styleSteeringActive` / `styleStatusLabel` from Swift-side
+    /// slot + blend state (the engine's `activePromptCount` undercounts
+    /// synchronously-set audio embeddings, so we don't query it). Call after
+    /// any slot or blend change so the UI can show whether clips are steering.
+    private func updateStyleStatus() {
+        var names: [String] = []
+        var steering = false
+        for slot in 0..<6 {
+            guard slotLoopIds[slot] != nil, blendWeights[slot] > 0.01 else { continue }
+            if let loopId = slotLoopIds[slot],
+               let loop = loops.first(where: { $0.id == loopId }),
+               loop.embedding.count >= 768 {
+                names.append(slotLabels[slot] ?? loop.name)
+                steering = true
+            }
+        }
+        styleSteeringActive = steering
+        if names.isEmpty {
+            let anyLoaded = (0..<6).contains { slotLoopIds[$0] != nil }
+            styleStatusLabel = anyLoaded ? "fallback (re-extract)" : "no prompt"
+        } else {
+            styleStatusLabel = names.joined(separator: " + ")
+        }
     }
 
     // MARK: - Transport
@@ -182,39 +336,78 @@ final class EngineController: ObservableObject {
         if let existing = self.slot(forLoop: loop.id ?? -1), existing != slot {
             clearSlot(existing)
         }
-        Task {
-            guard let audio = await decodedAudio(for: loop.songId) else { return }
-            let sr = audio.sampleRate
-            let ch = audio.channels
-            let startSample = Int(loop.startSec * sr) * ch
-            let endSample = min(Int(loop.endSec * sr) * ch, audio.samples.count)
-            guard endSample > startSample else { return }
-            let region = Array(audio.samples[startSample..<endSample])
-            bridge.setAudioPromptSamplesForIndex(Int32(slot),
-                                                  filename: loop.name,
-                                                  samples: region,
-                                                  count: UInt(region.count))
-            // Track the label and id for the prompt-surface UI
-            slotLabels[slot] = loop.name
-            slotLoopIds[slot] = loop.id
-            // Seed a default position for this slot on the prompt surface
-            // if the user hasn't dragged it yet.
-            if slotPositions[slot] == nil {
-                slotPositions[slot] = defaultSlotPosition(slot)
+
+        // Track the label and id for the prompt-surface UI immediately so
+        // the slot dot appears without waiting on any async work.
+        slotLabels[slot] = loop.name
+        slotLoopIds[slot] = loop.id
+        if slotPositions[slot] == nil {
+            slotPositions[slot] = defaultSlotPosition(slot)
+        }
+
+        // Primary path: the loop's MusicCoCa embedding is stored in the DB
+        // (extracted at import time via 16 kHz mono). Setting it
+        // synchronously flips `embedding_valid_` immediately, so the next
+        // `setBlendWeights` → `reblend_musiccoca_tokens` succeeds on the
+        // very next 25 Hz frame. The async `setAudioPromptSamples` path
+        // raced with reblend (embeddings weren't valid in time → reblend
+        // returned false → generation stayed on the default "piano" tokens).
+        if loop.embedding.count >= 768 {
+            loop.embedding.withUnsafeBufferPointer { embBuf in
+                bridge.setAudioEmbeddingForIndex(Int32(slot), embedding: embBuf.baseAddress!)
             }
             if solo {
                 setActiveSlot(slot)
             } else {
-                // Additive: distribute equally across all loaded slots
-                var loaded: [Int] = []
-                for i in 0..<6 where slotLoopIds[i] != nil { loaded.append(i) }
-                let w = 1.0 / Float(loaded.count)
-                var weights = Array(repeating: Float(0), count: 6)
-                for s in loaded { weights[s] = w }
-                blendWeights = weights
-                applyBlendWeights(weights)
+                applyAdditiveBlend()
+            }
+            return
+        }
+
+        // Fallback: no stored embedding (e.g. legacy row pre-migration, or
+        // extraction failed). Encode the clip's audio through MusicCoCa
+        // synchronously (16 kHz mono) and set the resulting embedding.
+        // We do NOT use the async `setAudioPromptSamplesForIndex` path —
+        // it races with `reblend` (embeddings aren't valid in time →
+        // generation falls back to default "piano" tokens).
+        Task { @MainActor in
+            guard let audio = await decodedAudio(for: loop.songId) else { return }
+            let mono16k = decoder.monoSamples16k(from: audio,
+                                                 startSec: loop.startSec,
+                                                 endSec: loop.endSec)
+            guard !mono16k.isEmpty else { return }
+            var emb = [Float](repeating: 0, count: 768)
+            let ok = emb.withUnsafeMutableBufferPointer { buf -> Bool in
+                bridge.encodeAudioPromptSync(mono16k, count: UInt(mono16k.count),
+                                              out: buf.baseAddress!)
+            }
+            guard ok, !emb.allSatisfy({ $0 == 0 }) else { return }
+            emb.withUnsafeBufferPointer { eb in
+                bridge.setAudioEmbeddingForIndex(Int32(slot), embedding: eb.baseAddress!)
+            }
+            if let id = loop.id {
+                try? library.updateLoopEmbedding(id, embedding: emb)
+                if let idx = loops.firstIndex(where: { $0.id == id }) {
+                    loops[idx].embedding = emb
+                }
+            }
+            if solo {
+                setActiveSlot(slot)
+            } else {
+                applyAdditiveBlend()
             }
         }
+    }
+
+    /// Redistribute blend weights equally across all loaded slots (additive).
+    private func applyAdditiveBlend() {
+        var loaded: [Int] = []
+        for i in 0..<6 where slotLoopIds[i] != nil { loaded.append(i) }
+        let w = 1.0 / Float(loaded.count)
+        var weights = Array(repeating: Float(0), count: 6)
+        for s in loaded { weights[s] = w }
+        blendWeights = weights
+        applyBlendWeights(weights)
     }
 
     /// Default position for a slot on the prompt surface (hex layout).
@@ -301,6 +494,26 @@ final class EngineController: ObservableObject {
         applyBlendWeights(blendWeights)
     }
 
+    /// Nudge the prompt-surface cursor by a normalized delta (for
+    /// arrow-key control). Clamps to [0,1]² and re-blends.
+    func nudgeCursor(dx: CGFloat, dy: CGFloat) {
+        let p = CGPoint(
+            x: max(0, min(1, cursorPosition.x + dx)),
+            y: max(0, min(1, cursorPosition.y + dy)))
+        cursorPosition = p
+        updatePromptSurface(cursor: p, slotPositions: slotPositions)
+    }
+
+    /// Cycle blend focus to the next loaded slot (for Tab control). Solo
+    /// the next slot that has a loop loaded, wrapping around.
+    func cycleSlot() {
+        let loaded = (0..<6).filter { slotLoopIds[$0] != nil }
+        guard !loaded.isEmpty else { return }
+        let current = loaded.firstIndex(of: activeSlot) ?? -1
+        let next = loaded[(current + 1) % loaded.count]
+        setActiveSlot(next)
+    }
+
     private func applyBlendWeights(_ weights: [Float]) {
         // Forward to the engine. The inference loop detects the position
         // generation bump from `set_blend_weights` and re-blends MusicCoCa
@@ -312,6 +525,7 @@ final class EngineController: ObservableObject {
         weights.withUnsafeBufferPointer { buf in
             bridge.setBlendWeights(buf.baseAddress!, count: Int32(weights.count))
         }
+        updateStyleStatus()
     }
 
     // MARK: - Prompt surface (2D IDW blend)
@@ -382,7 +596,7 @@ final class EngineController: ObservableObject {
             let grid = beatTracker.track(samples: mono, sampleRate: BeatTracker.sampleRate)
 
             importProgress = .slicing(name)
-            let candidates = loopExtractor.extractCandidates(audio: audio, grid: grid, barOptions: [2, 4], maxCount: 5)
+            let candidates = loopExtractor.extractCandidates(audio: audio, grid: grid, barOptions: [2, 4, 8], maxCount: 5)
 
             // Insert song
             let songId = try library.insertSong(Song(
@@ -637,6 +851,15 @@ final class EngineController: ObservableObject {
             // a bare Task.detached thread) they leak and can eventually
             // crash. Capture `bridge` as a local let so we don't access
             // the @MainActor-isolated `self.bridge` from the background.
+            //
+            // trim_front=25 (1 s) drops SpectroStream's encoder warm-up
+            // tokens at the start; trim_back=0 keeps the clip's actual
+            // last frame as the seed so generation resumes from the
+            // clip's true end. The encoder's zero-padding past a <28 s
+            // clip is already excluded internally, so 0 only drops the
+            // extra 1 s safety trim that the default prefill applies —
+            // which would otherwise make generation resume ~1 s *before*
+            // the clip's end.
             let bridgeRef = bridge
             let sampleCount = Int32(region.count)
             let ok = await Task.detached(priority: .userInitiated) { [weak self] () -> Bool in
@@ -644,6 +867,8 @@ final class EngineController: ObservableObject {
                     region.withUnsafeBufferPointer { buf -> Bool in
                         bridgeRef.prefillState(withSamples: buf.baseAddress!,
                                                sampleCount: sampleCount,
+                                               trimFrontFrames: 25,
+                                               trimBackFrames: 0,
                                                logCallback: { line in
                             Task { @MainActor in
                                 self?.prefillLog.append(line)
@@ -712,14 +937,17 @@ final class EngineController: ObservableObject {
             paramSnapshot.cfgNotes = 3.0
             paramSnapshot.cfgDrums = 1.0
         case .balanced:
+            // Live-performance defaults: strong style + note guidance so
+            // clips dominate, drums at 3, unmask 1 (coarse-only keeps it
+            // stable). These match the values the user tuned by hand.
             bridge.setTopK(100)
-            bridge.setCfgMusiccoca(3.0)
-            bridge.setCfgNotes(5.0)
-            bridge.setCfgDrums(1.0)
+            bridge.setCfgMusiccoca(8.0)
+            bridge.setCfgNotes(8.0)
+            bridge.setCfgDrums(3.0)
             paramSnapshot.topK = 100
-            paramSnapshot.cfgMusiccoca = 3.0
-            paramSnapshot.cfgNotes = 5.0
-            paramSnapshot.cfgDrums = 1.0
+            paramSnapshot.cfgMusiccoca = 8.0
+            paramSnapshot.cfgNotes = 8.0
+            paramSnapshot.cfgDrums = 3.0
         case .quality:
             bridge.setTopK(200)
             bridge.setCfgMusiccoca(5.0)
@@ -761,6 +989,89 @@ final class EngineController: ObservableObject {
             qualityPreset = .balanced
         }
     }
+
+    // MARK: - Recording / performance capture
+
+    /// Toggle the engine's recording state. Starting recording also starts
+    /// the audio engine if needed so the captured audio matches what's
+    /// heard. Stopping writes the captured audio to a timestamped WAV in
+    /// ~/Music/Aevum/.
+    func toggleRecording() {
+        if isRecording {
+            stopRecording()
+        } else {
+            startRecording()
+        }
+    }
+
+    func startRecording() {
+        guard !isRecording else { return }
+        // Ensure the audio engine is running so there's audio to capture.
+        if !isPlaying {
+            bridge.setMute(false)
+            isPlaying = true
+            do { try audioEngine.start() } catch { print("recording audioEngine start: \(error)") }
+            bridge.triggerReset()
+        }
+        audioEngine.startSwiftRecording()
+        isRecording = true
+        recordingError = nil
+        print("[rec] start: isPlaying=\(isPlaying) audioRunning=\(audioEngine.isRunning)")
+    }
+
+    func stopRecording() {
+        guard isRecording else { return }
+        audioEngine.stopSwiftRecording()
+        let count = audioEngine.recordedSampleCount
+        isRecording = false
+        print("[rec] stop: captured=\(count) samples (\(String(format: "%.1f", Double(count)/48000.0))s)")
+        exportRecording()
+    }
+
+    /// Read the captured audio from the Swift render callback and write it
+    /// to a 32-bit float HQ WAV in ~/Music/Aevum/. Runs on a detached
+    /// background task so the interleave + disk write don't block the
+    /// main actor or compete with the 25 Hz inference loop / Metal GPU
+    /// work during a performance.
+    private func exportRecording() {
+        let (left, right) = audioEngine.readAndClearRecording()
+        let total = left.count
+        print("[rec] export: total=\(total)")
+        guard total > 0 else { recordingError = "Recording was empty"; return }
+        // Hand the buffers to a detached task — the interleave + WAV
+        // write are pure CPU/disk and could take a second on a long
+        // take; running them off the main actor keeps the inference
+        // loop's scheduling steady.
+        Task.detached(priority: .utility) { [weak self] in
+            var interleaved = [Float](repeating: 0, count: total * 2)
+            for i in 0..<total {
+                interleaved[i * 2] = left[i]
+                interleaved[i * 2 + 1] = right[i]
+            }
+            let dir = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Music/Aevum")
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let ts = Self.recordingDateFormatter.string(from: Date())
+            let url = dir.appendingPathComponent("Aevum \(ts).wav")
+            do {
+                try WavWriter.write(interleaved, sampleRate: 48000, channels: 2, to: url)
+                await MainActor.run { self?.lastRecordingURL = url }
+                print("[rec] exported: \(url.path) (\(total) frames)")
+            } catch {
+                await MainActor.run { self?.recordingError = "Export failed: \(error.localizedDescription)" }
+            }
+        }
+    }
+
+    private static let recordingDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HHmmss"
+        return f
+    }()
+
+    // MARK: - Focused (performance) mode
+
+    func toggleFocused() { isFocused.toggle() }
 }
 
 // MARK: - Param snapshot (observable UI state)
@@ -768,10 +1079,10 @@ final class EngineController: ObservableObject {
 struct ParamSnapshot: Equatable {
     var temperature: Float = 1.0
     var topK: Float = 100
-    var cfgMusiccoca: Float = 3.0
-    var cfgNotes: Float = 5.0
-    var cfgDrums: Float = 1.0
-    var unmaskWidth: Float = 0
+    var cfgMusiccoca: Float = 8.0
+    var cfgNotes: Float = 8.0
+    var cfgDrums: Float = 3.0
+    var unmaskWidth: Float = 1.0
     var seedRotation: Float = 0
     var volumeDb: Float = 0
     var drumless: Bool = false

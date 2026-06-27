@@ -84,7 +84,16 @@ typedef void (^XFLogCallback)(NSString *line);
 // Read back the 768-dim embedding currently in slot `index` into `out`
 // (must point to 768 floats). Returns NO if slot is empty.
 - (BOOL)getAudioEmbeddingForIndex:(int)index out:(float *)out
-              NS_SWIFT_NAME(getAudioEmbeddingForIndex(_:out:));
+               NS_SWIFT_NAME(getAudioEmbeddingForIndex(_:out:));
+
+// Synchronously encode 16 kHz mono PCM through MusicCoCa into a 768-dim
+// embedding. `out` must point to 768 floats. No worker thread, no status
+// race. Use for offline extraction, then load the result via
+// -setAudioEmbeddingForIndex:embedding: for live morphing.
+- (BOOL)encodeAudioPromptSync:(const float *)samples
+                        count:(NSUInteger)count
+                          out:(float *)out
+               NS_SWIFT_NAME(encodeAudioPromptSync(_:count:out:));
 
 - (XFPromptStatus)textEncoderStatus;
 - (XFPromptStatus)promptStatusForIndex:(int)index NS_SWIFT_NAME(promptStatusForIndex(_:));
@@ -170,8 +179,18 @@ typedef void (^XFLogCallback)(NSString *line);
 // RealtimeRunner trims ~1s from each end automatically (SpectroStream
 // encoder edges are unreliable). Checkpoints so -reset returns here.
 - (BOOL)prefillStateWithSamples:(const float *)samples
-                    sampleCount:(int)sampleCount
-                    logCallback:(nullable XFLogCallback)logCallback;
+                     sampleCount:(int)sampleCount
+                     logCallback:(nullable XFLogCallback)logCallback;
+
+// Prefill with explicit edge-trim control (frames @ 25 Hz). Pass
+// `trimBackFrames = 0` to make generation resume from the clip's actual
+// last frame (the encoder's zero-padding past a <28s clip is already
+// excluded, so 0 only drops the extra safety trim).
+- (BOOL)prefillStateWithSamples:(const float *)samples
+                     sampleCount:(int)sampleCount
+                     trimFrontFrames:(int)trimFrontFrames
+                     trimBackFrames:(int)trimBackFrames
+                     logCallback:(nullable XFLogCallback)logCallback;
 
 - (BOOL)prefillSilenceWithDurationFrames:(int)durationFrames
                            logCallback:(nullable XFLogCallback)logCallback;

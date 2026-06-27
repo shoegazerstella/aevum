@@ -106,6 +106,12 @@ using magentart::core::kMusicCoCaEmbeddingDim;
     return _runner && _runner->get_audio_embedding(index, out);
 }
 
+- (BOOL)encodeAudioPromptSync:(const float *)samples
+                        count:(NSUInteger)count
+                          out:(float *)out {
+    return _runner && _runner->encode_audio_prompt_sync(samples, count, out);
+}
+
 - (XFPromptStatus)textEncoderStatus {
     return (XFPromptStatus)(_runner ? _runner->get_text_encoder_status() : 0);
 }
@@ -243,8 +249,8 @@ using magentart::core::kMusicCoCaEmbeddingDim;
 - (void)reset { if (_runner) _runner->reset(); }
 
 - (BOOL)prefillStateWithSamples:(const float *)samples
-                    sampleCount:(int)sampleCount
-                    logCallback:(XFLogCallback)logCallback {
+                     sampleCount:(int)sampleCount
+                     logCallback:(XFLogCallback)logCallback {
     if (!_runner) return NO;
     std::function<void(const std::string&)> cb;
     if (logCallback) {
@@ -253,6 +259,22 @@ using magentart::core::kMusicCoCaEmbeddingDim;
         };
     }
     return _runner->prefill_state(samples, sampleCount, cb);
+}
+
+- (BOOL)prefillStateWithSamples:(const float *)samples
+                     sampleCount:(int)sampleCount
+                     trimFrontFrames:(int)trimFrontFrames
+                     trimBackFrames:(int)trimBackFrames
+                     logCallback:(XFLogCallback)logCallback {
+    if (!_runner) return NO;
+    std::function<void(const std::string&)> cb;
+    if (logCallback) {
+        cb = [logCallback](const std::string &msg) {
+            logCallback([NSString stringWithUTF8String:msg.c_str()]);
+        };
+    }
+    return _runner->prefill_state(samples, sampleCount, trimFrontFrames,
+                                  trimBackFrames, cb);
 }
 
 - (BOOL)prefillSilenceWithDurationFrames:(int)durationFrames

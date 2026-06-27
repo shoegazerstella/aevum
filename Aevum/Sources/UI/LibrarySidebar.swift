@@ -18,6 +18,23 @@ struct LibrarySidebar: View {
                 .frame(maxWidth: .infinity, minHeight: 200)
             } else {
                 VStack(spacing: 2) {
+                    HStack {
+                        Text("\(controller.songs.count) songs")
+                            .font(AevumFont.micro).foregroundStyle(AevumColors.textFaint)
+                        Spacer()
+                        Button {
+                            controller.reextractAllEmbeddings(markMigrated: false)
+                        } label: {
+                            Label("Re-extract", systemImage: "arrow.triangle.2.circlepath")
+                                .font(AevumFont.micro)
+                                .foregroundStyle(AevumColors.amber)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(controller.isMigratingEmbeddings)
+                        .help("Re-compute every clip's style embedding with the 16 kHz mono format. Use this if morphing doesn't sound like your clips.")
+                    }
+                    .padding(.horizontal, AevumSpacing.s)
+                    .padding(.bottom, 4)
                     ForEach(controller.songs) { song in
                         SidebarRow(song: song,
                                    loopCount: controller.loops.filter { $0.songId == song.id }.count,

@@ -186,8 +186,12 @@ aevum/
 ├── AGENTS.md              — build/lint/test commands for agents
 ├── README.md              — this file
 ├── STATUS.md              — phased roadmap + build state
-├── build.sh               — top-level orchestrator (engine|app|run|clean)
+├── LICENSE                — MIT
+├── CITATION.bib           — papers to cite (Magenta RT 2 + components)
+├── build.sh               — top-level orchestrator (engine|app|run|release|clean)
 ├── project.yml            — XcodeGen config
+├── docs/                  — landing page (GitHub Pages source)
+├── logo/                  — cover artwork + icon master
 ├── scripts/
 │   └── build_engine.sh    — CMake build + merge into libaevum_engine.a
 ├── magenta-realtime/      — submodule (upstream, Apache-2.0)
@@ -204,9 +208,17 @@ aevum/
     └── Utility/           — WavWriter
 ```
 
+## Citations
+
+Aevum is an independent third-party front-end for Magenta RealTime 2 and is not affiliated with or endorsed by Google. The underlying model and its components are described in the papers below — please cite them when you publish work that uses Aevum or Magenta RealTime 2. Full BibTeX in [`CITATION.bib`](CITATION.bib).
+
+- **Live Music Models** — Caillon, McWilliams, Tarakajian, Simon, Manco, Engel, Constant, Li, Denk, … Roberts. NeurIPS Creative AI Workshop, 2025. [arXiv:2508.04651](https://arxiv.org/abs/2508.04651) — the primary citation for Magenta RealTime (per Google's model card; the MRT2 paper is forthcoming).
+- **SpectroStream: A Versatile Neural Codec for General Audio** — Li, Han, McWilliams, Borsos, Tagliasacchi. 2025. [arXiv:2508.05207](https://arxiv.org/abs/2508.05207) — the audio codec.
+- **MuLan: A Joint Embedding of Music Audio and Natural Language** — Huang, Jansen, Lee, Ganti, Li, Ellis. ISMIR, 2022. [arXiv:2208.12415](https://arxiv.org/abs/2208.12415) — joint audio-text embeddings (MusicCoCa builds on this).
+- **CoCa: Contrastive Captioners are Image-Text Foundation Models** — Yu, Wang, Vasudevan, Yeung, Seyedhosseini, Wu. 2022. [arXiv:2205.01917](https://arxiv.org/abs/2205.01917) — the contrastive-captioner architecture MusicCoCa builds on.
+
 ## License
 
-Source code in this repository: see `LICENSE` (to be added). The bundled
-`magenta-realtime` submodule is Apache-2.0. Model weights are released by
-Google under their own license (see
-[HuggingFace](https://huggingface.co/google/magenta-realtime-2)).
+Aevum's source code is released under the **MIT License** — see [LICENSE](LICENSE).
+
+The bundled [`magenta-realtime`](https://github.com/magenta/magenta-realtime) submodule is **Apache-2.0**. Model weights for Magenta RealTime 2 are released by Google under **CC-BY-4.0** (see [HuggingFace](https://huggingface.co/google/magenta-realtime-2)). Downloading the weights through Aevum's first-run downloader is subject to Google's [Terms of Use](https://huggingface.co/google/magenta-realtime-2#terms-of-use).

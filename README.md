@@ -6,6 +6,8 @@
 
 <p align="center">A macOS app for live AI music performance built on <a href="https://magenta.withgoogle.com/magenta-realtime-2">Magenta RealTime 2</a>. Load songs, auto-extract musical loops, morph between them in real time, and control every generation parameter live with a MIDI controller.</p>
 
+<p align="center"><em>aevum, lat. — an age; a long, indefinite span of time</em></p>
+
 <p align="center">
   <a href="https://github.com/shoegazerstella/aevum/releases/latest"><img src="https://img.shields.io/badge/download-macOS%20%7C%20Apple%20Silicon-FFB547?style=flat-square" alt="Download"></a>
   <a href="https://shoegazerstella.github.io/aevum"><img src="https://img.shields.io/badge/website-aevum.app-3DD9EB?style=flat-square" alt="Website"></a>

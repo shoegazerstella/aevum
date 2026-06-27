@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo.png" width="160" alt="Aevum">
+  <img src="docs/logo.png" width="240" alt="Aevum">
 </p>
 
 <h1 align="center">Aevum</h1>
